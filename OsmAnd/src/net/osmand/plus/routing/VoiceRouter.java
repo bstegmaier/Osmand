@@ -9,7 +9,9 @@ import net.osmand.Location;
 import net.osmand.binary.RouteDataObject;
 import net.osmand.data.PointDescription;
 import net.osmand.plus.ApplicationMode;
+import net.osmand.plus.Keys;
 import net.osmand.plus.OsmandSettings;
+import net.osmand.plus.PebbleCommunicator;
 import net.osmand.plus.helpers.WaypointHelper.LocationPointWrapper;
 import net.osmand.plus.routing.AlarmInfo.AlarmInfoType;
 import net.osmand.plus.routing.RouteCalculationResult.NextDirectionInfo;
@@ -22,6 +24,9 @@ import net.osmand.util.Algorithms;
 import net.osmand.util.MapUtils;
 import alice.tuprolog.Struct;
 import alice.tuprolog.Term;
+
+import android.app.Application;
+import android.content.Context;
 import android.media.AudioManager;
 import android.media.SoundPool;
 
@@ -326,6 +331,8 @@ public class VoiceRouter {
 	public void announceAlarm(AlarmInfoType type) {
 		if (type == AlarmInfoType.SPEED_LIMIT) {
 			announceSpeedAlarm();
+			PebbleCommunicator.sendAlert(settings.getContext(), Keys.GENERIC_ALERT, "SPEED LIMIT");
+
 		} else if (type == AlarmInfoType.SPEED_CAMERA) {
 			if (router.getSettings().SPEAK_SPEED_CAMERA.get()) {
 				CommandBuilder p = getNewCommandPlayerToPlay();
@@ -333,6 +340,7 @@ public class VoiceRouter {
 					notifyOnVoiceMessage();
 					p.attention(type+"").play();
 				}
+				PebbleCommunicator.sendAlert(settings.getContext(), Keys.GENERIC_ALERT, "SPEED TRAP");
 			}
 		} else if (type == AlarmInfoType.PEDESTRIAN) {
 			if (router.getSettings().SPEAK_PEDESTRIAN.get()) {
@@ -341,6 +349,7 @@ public class VoiceRouter {
 					notifyOnVoiceMessage();
 					p.attention(type+"").play();
 				}
+				PebbleCommunicator.sendAlert(settings.getContext(), Keys.GENERIC_ALERT, "PEDESTRIAN CROSSING");
 			}
 		} else {
 			if (router.getSettings().SPEAK_TRAFFIC_WARNINGS.get()) {
@@ -350,6 +359,7 @@ public class VoiceRouter {
 					p.attention(type+"").play();
 				}
 			}
+			PebbleCommunicator.sendAlert(settings.getContext(), Keys.GENERIC_ALERT, "TRAFFIC WARNINGS");
 		}
 	}
 
@@ -538,6 +548,23 @@ public class VoiceRouter {
 		}
 	}
 
+	public String getStreetNameString(RouteSegmentResult currentSegment, RouteDirectionInfo i) {
+		if(i == null) {
+			return "";
+		}
+
+		String ref = getSpeakablePointName(i.getRef());
+		String streetName = getSpeakablePointName(i.getStreetName());
+		String destName = getSpeakablePointName(i.getDestinationName());
+
+		String result = ""
+				+ ((ref == null) ? "" : ref)
+				+ ((streetName == null) ? "" : " " + streetName)
+				+ ((destName == null) ? "" : " " + destName);
+
+		return result;
+	}
+
 	public Term getSpeakableStreetName(RouteSegmentResult currentSegment, RouteDirectionInfo i) {
 		if(i == null || !router.getSettings().SPEAK_STREET_NAMES.get()){
 			return empty;
@@ -609,13 +636,17 @@ public class VoiceRouter {
 		CommandBuilder play = getNewCommandPlayerToPlay();
 		if (play != null) {
 			String tParam = getTurnType(next.getTurnType());
+			int turnType = getTurnTypePebble(next.getTurnType());
 			boolean isPlay = true;
 			if (tParam != null) {
 				play.turn(tParam, dist, getSpeakableStreetName(currentSegment, next));
+				PebbleCommunicator.sendInstruction(settings.getContext(), turnType, dist, getStreetNameString(currentSegment, next));
 			} else if (next.getTurnType().isRoundAbout()) {
 				play.roundAbout(dist, next.getTurnType().getTurnAngle(), next.getTurnType().getExitOut(), getSpeakableStreetName(currentSegment, next));
+				PebbleCommunicator.sendInstruction(settings.getContext(), turnType, dist, "exit " + next.getTurnType().getExitOut() + " " + getStreetNameString(currentSegment, next));
 			} else if (next.getTurnType().getValue() == TurnType.TU || next.getTurnType().getValue() == TurnType.TRU) {
 				play.makeUT(dist, getSpeakableStreetName(currentSegment, next));
+				PebbleCommunicator.sendInstruction(settings.getContext(), turnType, dist, getStreetNameString(currentSegment, next));
 			} else {
 				isPlay = false;
 			}
@@ -661,13 +692,17 @@ public class VoiceRouter {
 		CommandBuilder play = getNewCommandPlayerToPlay();
 		if(play != null){
 			String tParam = getTurnType(next.getTurnType());
+			int turnType = getTurnTypePebble(next.getTurnType());
 			boolean isplay = true;
-			if(tParam != null){
+			if (tParam != null) {
 				play.turn(tParam, getSpeakableStreetName(currentSegment, next));
-			} else if(next.getTurnType().isRoundAbout()){
-				play.roundAbout(next.getTurnType().getTurnAngle(), next.getTurnType().getExitOut(),  getSpeakableStreetName(currentSegment, next));
+				PebbleCommunicator.sendInstruction(settings.getContext(), turnType, 0, getStreetNameString(currentSegment, next));
+			} else if(next.getTurnType().isRoundAbout()) {
+				play.roundAbout(next.getTurnType().getTurnAngle(), next.getTurnType().getExitOut(), getSpeakableStreetName(currentSegment, next));
+				PebbleCommunicator.sendInstruction(settings.getContext(), turnType, 0, "exit " + next.getTurnType().getExitOut() + " " + getStreetNameString(currentSegment, next));
 			} else if(next.getTurnType().getValue() == TurnType.TU || next.getTurnType().getValue() == TurnType.TRU){
 				play.makeUT( getSpeakableStreetName(currentSegment, next));
+				PebbleCommunicator.sendInstruction(settings.getContext(), turnType, 0, getStreetNameString(currentSegment, next));
 				// do not say it
 //				} else if(next.getTurnType().getValue() == TurnType.C)){
 //					play.goAhead();
@@ -695,7 +730,35 @@ public class VoiceRouter {
 			}
 		}
 	}
-	
+
+	private int getTurnTypePebble(TurnType t){
+		if(TurnType.TL == t.getValue()){
+			return Keys.TURN_LEFT_INSTRUCTION;
+		} else if(TurnType.TSHL == t.getValue()){
+			return Keys.TURN_SHARPLY_LEFT_INSTRUCTION;
+		} else if(TurnType.TSLL == t.getValue()){
+			return Keys.TURN_SLIGHTLY_LEFT_INSTRUCTION;
+		} else if(TurnType.TR == t.getValue()){
+			return Keys.TURN_RIGHT_INSTRUCTION;
+		} else if(TurnType.TSHR == t.getValue()){
+			return Keys.TURN_SHARPLY_RIGHT_INSTRUCTION;
+		} else if(TurnType.TSLR == t.getValue()){
+			return Keys.TURN_SLIGHTLY_RIGHT_INSTRUCTION;
+		} else if(TurnType.KL == t.getValue()){
+            return Keys.KEEP_LEFT_INSTRUCTION;
+		} else if(TurnType.KR == t.getValue()) {
+			return Keys.KEEP_RIGHT_INSTRUCTION;
+		} else if(t.isRoundAbout()) {
+			// TODO roundabout left right
+			return Keys.EXIT_ROUNDABOUT_INSTRUCTION;
+		} else if(TurnType.TU == t.getValue()) {
+			return Keys.MAKE_UTURN_LEFT_INSTRUCTION;
+		} else if(TurnType.TRU == t.getValue()) {
+			return Keys.MAKE_UTURN_RIGHT_INSTRUCTION;
+		}
+		return Keys.GO_STRAIGHT_INSTRUCTION;
+	}
+
 	private String getTurnType(TurnType t){
 		if(TurnType.TL == t.getValue()){
 			return AbstractPrologCommandPlayer.A_LEFT;
@@ -746,12 +809,14 @@ public class VoiceRouter {
 					play.routeRecalculated(router.getLeftDistance(), router.getLeftTime()).play();
 					currentStatus = STATUS_UNKNOWN;
 					// lastTimeRouteRecalcAnnounced = System.currentTimeMillis();
+					PebbleCommunicator.sendNavigationInfo(settings.getContext(), "?", router.getLeftDistance(), router.getLeftTime());
 				}
 			} else {
 				notifyOnVoiceMessage();
 				play.newRouteCalculated(router.getLeftDistance(), router.getLeftTime()).play();
 				playGoAheadDist = -1;
 				currentStatus = STATUS_UNKNOWN;
+				PebbleCommunicator.sendNavigationInfo(settings.getContext(), "?", router.getLeftDistance(), router.getLeftTime());
 			}
 		} else if (player == null) {
 			pendingCommand = new VoiceCommandPending(!newRoute ? VoiceCommandPending.ROUTE_RECALCULATED

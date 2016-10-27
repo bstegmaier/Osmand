@@ -142,6 +142,7 @@ android {
 
 	buildTypes {
 		debug {
+			applicationIdSuffix ".debug"
 			// proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-project.txt'
 			// minifyEnabled true
 			// proguardFiles 'proguard-project.txt'
@@ -345,7 +346,8 @@ repositories {
 			artifact "ivy/[organisation]/[module]/[revision]/[artifact]-[revision].[ext]"
 		}
 	}
-	// mavenCentral()
+	mavenCentral()
+	maven { url "https://oss.sonatype.org/content/groups/public/" }
 }
 
 dependencies {
@@ -371,4 +373,5 @@ dependencies {
 	qtcoredebugCompile "net.osmand:OsmAndCore_android:0.1-SNAPSHOT@aar"
 	qtcoreCompile "net.osmand:OsmAndCore_androidNativeRelease:0.1-SNAPSHOT@aar"
 	qtcoreCompile "net.osmand:OsmAndCore_android:0.1-SNAPSHOT@aar"
+	compile 'com.getpebble:pebblekit:3.0.0'
 }

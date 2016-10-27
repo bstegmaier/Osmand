@@ -12,24 +12,20 @@ import android.support.v7.app.AlertDialog;
 
 import net.osmand.PlatformUtil;
 import net.osmand.plus.OsmandApplication;
+import net.osmand.plus.PebbleCommunicator;
 import net.osmand.plus.R;
 import net.osmand.plus.activities.SettingsActivity;
 import net.osmand.plus.routing.VoiceRouter;
 import net.osmand.util.Algorithms;
 
 import org.apache.commons.logging.Log;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-
 
 public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
-	public final static String PEBBLE_ALERT = "PEBBLE_ALERT";
 	public final static String WEAR_ALERT = "WEAR_ALERT";
 	private static final class IntentStarter implements
 			DialogInterface.OnClickListener {
@@ -103,7 +99,9 @@ public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
 		for (String s : execute) {
 			bld.append(s).append(' ');
 		}
-		sendAlertToPebble(bld.toString());
+		// PebbleCommunicator.sendVoiceAlertToPebble(mTtsContext, bld.toString());
+		PebbleCommunicator.startWatchApp(mTtsContext);
+		//PebbleCommunicator.sendAlarm(mTtsContext);
 		if (mTts != null && !vrt.isMute()) {
 			if (ttsRequests++ == 0)
 				requestAudioFocus();
@@ -121,20 +119,6 @@ public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
 		if (mTts != null){
 			mTts.stop();
 		}
-	}
-
-	public void sendAlertToPebble(String bld) {
-	    final Intent i = new Intent("com.getpebble.action.SEND_NOTIFICATION");
-	    final Map<String, Object> data = new HashMap<String, Object>();
-	    data.put("title", "Voice");
-	    data.put("body", bld.toString());
-	    final JSONObject jsonData = new JSONObject(data);
-	    final String notificationData = new JSONArray().put(jsonData).toString();
-	    i.putExtra("messageType", PEBBLE_ALERT);
-	    i.putExtra("sender", "OsmAnd");
-	    i.putExtra("notificationData", notificationData);
-	    mTtsContext.sendBroadcast(i);
-	    log.info("Send message to pebble " + bld.toString());
 	}
 
 
